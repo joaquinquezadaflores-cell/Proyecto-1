@@ -1,0 +1,41 @@
+"""
+pseudo codigo
+
+mientras verdadero:
+  si rb es presionado:
+    motor d se mueve en sentido antihorario a 20%
+  si rb no es presionado:
+    motor d se detiene
+  si lb es presionado:
+    motor d se mueve en sentido horario a 20%
+  si lb no es presionado:
+    motor d se detiene
+
+  si rt es presionado:
+    motor c se mueve en sentido horario a 10%
+  si rt no es presionado:
+    motor c se detiene
+  si lt es presionado:
+    motor c se mueve en sentido antihorario a 10%
+  si lt es soltado:
+    motor c se detiene:
+
+  si stick izquierdo es arriba:
+    motor f se mueve en sentido horario a 10%
+  si stick izquierdo es abajo:
+    motor f se mueve en sentido antihorario a 10%
+  si stick izquierd no se mueve:
+    motor f se detiene
+
+  si stick izquierdo es arriba:
+      motor b se mueve en sentido horario a 10%
+    si stick izquierdo es abajo:
+      motor b se mueve en sentido antihorario a 10%
+    si stick izquierd no se mueve:
+      motor b se detiene
+
+  
+
+
+  
+"""
