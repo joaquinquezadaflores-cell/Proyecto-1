@@ -5,26 +5,21 @@ from pybricks.tools import wait
 
 controller = XboxController()
 
-motor_D = Motor(Port.D, Direction.CLOCKWISE)      # RB / LB
-motor_F = Motor(Port.F, Direction.CLOCKWISE)      # Stick izquierdo
-motor_B = Motor(Port.B, Direction.CLOCKWISE)      # Stick derecho
-motor_C = Motor(Port.C, Direction.CLOCKWISE)      # Gatillos
+motor_D = Motor(Port.D, Direction.CLOCKWISE)      # motor de la base
+motor_F = Motor(Port.F, Direction.CLOCKWISE)     # motor de la muñeca
+motor_B = Motor(Port.B, Direction.CLOCKWISE)      # motor del brazo
+motor_C = Motor(Port.C, Direction.CLOCKWISE)      # motor de la garra
 
 DEADZONE = 15
-potencia = 60
-hola = -40
+
 while True:
+
     buttons = controller.buttons.pressed()
     lx, ly = controller.joystick_left()
     rx, ry = controller.joystick_right()
     lt, rt = controller.triggers()
 
-    print("Buttons:", buttons)         # lista de botones reconocidos
-    print("Left stick:", (lx, ly))
-    print("Right stick:", (rx, ry))
-    print("Triggers (LT,RT):", (lt, rt))
-    print("----")
-    # --- BOTONES RB / LB ---
+    #Movimiento de la base
     buttons = controller.buttons.pressed()
 
     if Button.RB in buttons:
@@ -34,19 +29,17 @@ while True:
     else:
         motor_D.stop()
 
-    # --- STICK IZQUIERDO (motor F) ---
+    #Movimiento de la muñeca
     lx, ly = controller.joystick_left()
 
     if ly > DEADZONE:
-        motor_F.dc(potencia)
-        print(f"potencia: {potencia}")
+        motor_F.dc(60)
     elif ly < -DEADZONE:
-        motor_F.dc(hola)
-        print(f"-potencia: {hola}")
+        motor_F.dc(-40)
     else:
         motor_F.stop()
 
-    # --- STICK DERECHO (motor B) ---
+    #Movimiento del Brazo
     rx, ry = controller.joystick_right()
 
     if ry > DEADZONE:
@@ -56,7 +49,7 @@ while True:
     else:
         motor_B.stop()
 
-    # --- GATILLOS RT / LT (motor C) ---
+    #Movimiento de la garra
     lt, rt = controller.triggers()
 
     if rt > 5:
