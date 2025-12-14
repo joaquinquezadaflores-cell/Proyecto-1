@@ -29,7 +29,6 @@ while True:
         motor_D.stop()
 
     #Movimiento de la muñeca
-    lx, ly = controller.joystick_left()
 
     if ly > DEADZONE:
         motor_F.dc(60)
@@ -39,7 +38,6 @@ while True:
         motor_F.stop()
 
     #Movimiento del Brazo
-    rx, ry = controller.joystick_right()
 
     if ry > DEADZONE:
         motor_B.dc(30)
@@ -49,7 +47,6 @@ while True:
         motor_B.stop()
 
     #Movimiento de la garra
-    lt, rt = controller.triggers()
 
     if rt > 5:
         motor_C.dc(35)
