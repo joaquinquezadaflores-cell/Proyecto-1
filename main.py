@@ -20,7 +20,6 @@ while True:
     lt, rt = controller.triggers()
 
     #Movimiento de la base
-    buttons = controller.buttons.pressed()
 
     if Button.RB in buttons:
         motor_D.dc(30)
