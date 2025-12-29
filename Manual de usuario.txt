@@ -1,0 +1,8 @@
+primero se tiene que instalar el firmware de pybricks en el hub lego spike prime en la siguiente página
+https://code.pybricks.com/
+a la izquierda dice "firmware" y un botón que dice "Intall Pybricks Firmware", seleccionas el hub, aceptas
+las licencias, le das nombre al hub y sigues las instrucciones que especifica la página.
+para visual studio code lo más recomendable es seguir la guia oficial de pybricks
+https://www.google.com/url?sa=i&source=web&rct=j&url=https://translate.google.com/translate?u%3Dhttps://pybricks.com/project/pybricks-other-editors/%26hl%3Des%26sl%3Den%26tl%3Des%26client%3Dsge&opi=89978449&psig=AOvVaw2_Vzbi3R_G_cAFoyU6SAu1&ust=1767058355529000
+en vscode usando el pip hay que instalar pybricks y pybricksdev
+luego conectar el hub por bluethoot y ejecutar el programa desde vscode
