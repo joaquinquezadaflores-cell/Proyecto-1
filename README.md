@@ -44,7 +44,7 @@ El proyecto fue desarrollado en la **Universidad de Tarapacá (Arica)** durante 
 - Finalmente, se debe conectar el hub por Bluetooth y ejecutar el programa desde Visual Studio Code.
 ## Release
 - Otra opción es usar el ejecutable disponible en:
-- github.com/joaquinquezadaflores-cell/Proyecto-1/releases/tag/1.0
+- https://github.com/joaquinquezadaflores-cell/Proyecto-1/releases/tag/1.0
 - Compatible con Windows 11
 - Siga los pasos indicados en la preparación del hub
 - Luego se descarga el ejecutable "Control.para.Brazo.robotico.de.agarre.exe"
