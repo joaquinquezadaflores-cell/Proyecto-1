@@ -117,6 +117,7 @@ class Interfaz:
         self.raiz = raiz
         self.raiz.title("Control LEGO SPIKE")
         self.raiz.geometry("480x480")
+        self.raiz.configure(bg="#1e1e1e")
 
         self.cola_log = Queue()
         self.conexion = ConexionBLE(self.cola_log)
