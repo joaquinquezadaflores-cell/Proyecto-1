@@ -34,14 +34,23 @@ El proyecto fue desarrollado en la **Universidad de Tarapacá (Arica)** durante 
 
 ## Instalación
 -Primero, se debe instalar el firmware de Pybricks en el hub LEGO SPIKE Prime desde la siguiente página:
+
 -https://code.pybricks.com/
+
 -En el panel izquierdo aparece la sección “Firmware”, junto a un botón que dice “Install Pybricks Firmware”. Se debe seleccionar el hub, aceptar las licencias, asignarle un nombre y seguir las instrucciones que indica la página.
+
 -Para Visual Studio Code, lo más recomendable es seguir la guía oficial de Pybricks:
+
 -https://translate.google.com/translate?u=https://pybricks.com/project/pybricks-other-editors/&hl=es&sl=en&tl=es
+
 -En VS Code, utilizando pip, es necesario instalar las librerías pybricks y pybricksdev.
+
 -Luego en la consola escribir "cd [nombre de la carpeta de instalación]" (sin los corchetes)
+
 -luego escribir "git clone https://github.com/joaquinquezadaflores-cell/Proyecto-1"
+
 -Finalmente, se debe conectar el hub por Bluetooth y ejecutar el programa desde Visual Studio Code.
+
 -Otra opción es usar el ejecutable disponible en:
 github.com/joaquinquezadaflores-cell/Proyecto-1/releases/tag/1.0
 
