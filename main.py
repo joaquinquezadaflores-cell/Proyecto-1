@@ -6,59 +6,9 @@ from queue import Queue, Empty
 import tkinter as tk
 from tkinter import ttk
 
-import customtkinter as ctk
 from bleak import BleakScanner
 
 from pybricksdev.connections.pybricks import PybricksHubBLE
-
-
-# =========================================================
-# Ventana selección de dispositivo BLE
-# =========================================================
-
-class DeviceSelectWindow(ctk.CTkToplevel):
-    def __init__(self, parent, callback):
-        super().__init__(parent)
-        self.callback = callback
-
-        self.title("Buscar HUB LEGO")
-        self.geometry("400x400")
-        self.attributes("-topmost", True)
-        self.grab_set()
-
-        self.label = ctk.CTkLabel(self, text="Escaneando dispositivos BLE...")
-        self.label.pack(pady=10)
-
-        self.scroll = ctk.CTkScrollableFrame(self)
-        self.scroll.pack(expand=True, fill="both", padx=10, pady=10)
-
-        threading.Thread(target=self._scan, daemon=True).start()
-
-    def _scan(self):
-        loop = asyncio.new_event_loop()
-        devices = loop.run_until_complete(BleakScanner.discover(timeout=4.0))
-        loop.close()
-        self.after(0, lambda: self._show(devices))
-
-    def _show(self, devices):
-        self.label.configure(text="Seleccione su dispositivo:")
-        for d in devices:
-            if d.name:
-                btn = ctk.CTkButton(
-                    self.scroll,
-                    text=f"{d.name}\n{d.address}",
-                    command=lambda dev=d: self._select(dev)
-                )
-                btn.pack(fill="x", pady=4)
-
-    def _select(self, device):
-        self.callback(device)
-        self.destroy()
-
-
-# =========================================================
-# Generación de programa Pybricks
-# =========================================================
 
 def crear_programa(comando: str) -> str:
     COMANDOS = {
@@ -113,11 +63,6 @@ async def ejecutar_programa(hub, comando, registrar_log):
     finally:
         os.unlink(ruta)
 
-
-# =========================================================
-# Conexión BLE (asyncio + thread)
-# =========================================================
-
 class ConexionBLE:
     def __init__(self, cola_log):
         self.loop = asyncio.new_event_loop()
@@ -165,10 +110,57 @@ class ConexionBLE:
         except Exception as error:
             self.registrar_log(f"Error BLE: {error}")
 
+import tkinter as tk
+import threading
+import asyncio
+from bleak import BleakScanner
 
-# =========================================================
-# Interfaz gráfica
-# =========================================================
+
+class VentanaSeleccionDispositivo(tk.Toplevel):
+    def __init__(self, padre, callback_seleccion):
+        super().__init__(padre)
+        self.callback_seleccion = callback_seleccion
+
+        self.title("Buscar HUB LEGO")
+        self.geometry("400x400")
+        self.attributes("-topmost", True)
+        self.grab_set()
+
+        self.etiqueta_estado = tk.Label(self, text="Escaneando dispositivos...")
+        self.etiqueta_estado.pack(pady=10)
+
+        self.contenedor_dispositivos = tk.Frame(self)
+        self.contenedor_dispositivos.pack(
+            expand=True, fill="both", padx=10, pady=10
+        )
+
+        # Iniciar escaneo en segundo plano
+        threading.Thread(
+            target=self._hilo_escaneo, daemon=True
+        ).start()
+
+    def _hilo_escaneo(self):
+        asyncio.run(self._escaneo())
+
+    async def _escaneo(self):
+        dispositivos = await BleakScanner.discover(timeout=4.0)
+        self.after(0, lambda: self._mostrar_dispositivos(dispositivos))
+
+    def _mostrar_dispositivos(self, dispositivos):
+        self.etiqueta_estado.config(text="Seleccione su dispositivo:")
+
+        for dispositivo in dispositivos:
+            if dispositivo.name:
+                boton = tk.Button(
+                    self.contenedor_dispositivos,
+                    text=f"{dispositivo.name}\n{dispositivo.address}",
+                    command=lambda d=dispositivo: self._seleccionar_dispositivo(d)
+                )
+                boton.pack(fill="x", pady=4)
+
+    def _seleccionar_dispositivo(self, dispositivo):
+        self.callback_seleccion(dispositivo)
+        self.destroy()
 
 class Interfaz:
     def __init__(self, raiz):
@@ -226,7 +218,7 @@ class Interfaz:
         )
 
     def abrir_selector(self):
-        DeviceSelectWindow(self.raiz, self.dispositivo_seleccionado)
+        VentanaSeleccionDispositivo(self.raiz, self.dispositivo_seleccionado)
 
     def dispositivo_seleccionado(self, dispositivo):
         self.cola_log.put(f"Dispositivo seleccionado: {dispositivo.name}")
@@ -247,12 +239,7 @@ class Interfaz:
         self.raiz.after(150, self.actualizar_log)
 
 
-# =========================================================
-# Main
-# =========================================================
-
 if __name__ == "__main__":
-    ctk.set_appearance_mode("dark")
     raiz = tk.Tk()
     Interfaz(raiz)
     raiz.mainloop()
