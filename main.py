@@ -3,243 +3,264 @@ import threading
 import tempfile
 import os
 from queue import Queue, Empty
-import tkinter as tk
-from tkinter import ttk
 
+import customtkinter as ctk
 from bleak import BleakScanner
-
 from pybricksdev.connections.pybricks import PybricksHubBLE
 
-def crear_programa(comando: str) -> str:
-    COMANDOS = {
-        "base_izq": "motor_D.dc(-500)",
-        "base_der": "motor_D.run(500)",
-
-        "muneca_arr": "motor_F.dc(500)",
-        "muneca_abj": "motor_F.dc(-500)",
-
-        "brazo_arr": "motor_B.dc(800)",
-        "brazo_abj": "motor_B.dc(-800)",
-
-        "garra_abrir": "motor_C.dc(500)",
-        "garra_cerrar": "motor_C.dc(-500)",
-
-        "detener_todo": """
-motor_D.stop()
-motor_F.stop()
-motor_B.stop()
-motor_C.stop()
-"""
-    }
-
-    accion = COMANDOS.get(comando, COMANDOS["detener_todo"])
-
-    return (f"""
+CODIGO_GATEWAY_HUB = """
+from pybricks.hubs import PrimeHub
 from pybricks.pupdevices import Motor
 from pybricks.parameters import Port, Direction
+from pybricks.tools import wait
+import uselect, usys
 
-motor_D = Motor(Port.D, Direction.CLOCKWISE)
-motor_F = Motor(Port.F, Direction.CLOCKWISE)
-motor_B = Motor(Port.B, Direction.CLOCKWISE)
-motor_C = Motor(Port.C, Direction.CLOCKWISE)
+hub = PrimeHub()
 
-{accion}
-""")
+motor_base = Motor(Port.D, Direction.CLOCKWISE)
+motor_muneca = Motor(Port.F, Direction.CLOCKWISE)
+motor_brazo = Motor(Port.B, Direction.CLOCKWISE)
+motor_garra = Motor(Port.C, Direction.CLOCKWISE)
 
+motor_base.reset_angle(0)
+motor_muneca.reset_angle(0)
+motor_brazo.reset_angle(0)
+motor_garra.reset_angle(0)
 
-async def ejecutar_programa(hub, comando, registrar_log):
-    codigo = crear_programa(comando)
-    print (codigo)
+poll = uselect.poll()
+poll.register(usys.stdin, uselect.POLLIN)
 
-    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as archivo:
-        archivo.write(codigo)
-        ruta = archivo.name
+hub.display.char('A')
 
-    try:
-        await hub.run(ruta, wait=False)
-        registrar_log(f"Comando enviado: {comando}")
-    except Exception as error:
-        registrar_log(f"Error ejecución: {error}")
-    finally:
-        os.unlink(ruta)
+while True:
+    if poll.poll(10):
+        comando = usys.stdin.read(2)
 
-class ConexionBLE:
-    def __init__(self, cola_log):
-        self.loop = asyncio.new_event_loop()
-        self.cola_comandos = asyncio.Queue()
-        self.hilo = threading.Thread(target=self._ejecutar_loop, daemon=True)
+        # BASE
+        if comando == 'D+':
+            motor_base.run(100)
+        elif comando == 'D-':
+            motor_base.run(-100)
+
+        # MUÑECA (límites)
+        elif comando == 'F+' and motor_muneca.angle() < 85:
+            motor_muneca.run(35)
+        elif comando == 'F-' and motor_muneca.angle() > -185:
+            motor_muneca.run(-35)
+
+        # BRAZO
+        elif comando == 'B+':
+            motor_brazo.run(25)
+        elif comando == 'B-':
+            motor_brazo.run(-25)
+
+        # GARRA
+        elif comando == 'C+':
+            motor_garra.run(35)
+        elif comando == 'C-':
+            motor_garra.run(-35)
+
+        # STOP GENERAL
+        elif comando == 'ST':
+            motor_base.stop()
+            motor_muneca.stop()
+            motor_brazo.stop()
+            motor_garra.stop()
+
+    wait(20)
+"""
+
+class WorkerBLE:
+    def __init__(self, cola_logs: Queue):
+        self.bucle = asyncio.new_event_loop()
+        self.hilo = threading.Thread(target=self._hilo_principal, daemon=True)
+        self.cola_comandos = None
         self.hub = None
-        self.dispositivo = None
-        self.cola_log = cola_log
+        self.en_ejecucion = threading.Event()
+        self.cola_logs = cola_logs
+        self.dispositivo_objetivo = None
+        self.solicitud_conexion = asyncio.Event()
 
-    def set_dispositivo(self, dispositivo):
-        self.dispositivo = dispositivo
-
-    def registrar_log(self, mensaje):
-        self.cola_log.put(mensaje)
+    def log(self, mensaje: str):
+        self.cola_logs.put(mensaje)
 
     def iniciar(self):
-        if not self.dispositivo:
-            self.registrar_log("❌ No hay dispositivo seleccionado")
-            return
         if not self.hilo.is_alive():
             self.hilo.start()
 
-    def enviar_comando(self, comando):
-        if self.loop.is_running():
-            self.loop.call_soon_threadsafe(
-                self.cola_comandos.put_nowait, comando
-            )
+    def _hilo_principal(self):
+        asyncio.set_event_loop(self.bucle)
+        self.bucle.create_task(self._ejecutor())
+        self.bucle.run_forever()
 
-    def _ejecutar_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.create_task(self._principal())
-        self.loop.run_forever()
+    async def _ejecutor(self):
+        ruta_temp = None
+        while True:
+            await self.solicitud_conexion.wait()
+            try:
+                self.log("Conectando al hub...")
+                self.hub = PybricksHubBLE(self.dispositivo_objetivo)
+                await self.hub.connect()
 
-    async def _principal(self):
-        try:
-            self.registrar_log(f"Conectando a {self.dispositivo.name}...")
-            self.hub = PybricksHubBLE(self.dispositivo)
-            await self.hub.connect()
-            self.registrar_log("Conectado ✔")
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, encoding="utf-8"
+                ) as archivo:
+                    archivo.write(CODIGO_GATEWAY_HUB)
+                    ruta_temp = archivo.name
 
-            while True:
-                comando = await self.cola_comandos.get()
-                await ejecutar_programa(self.hub, comando, self.registrar_log)
+                self.log("Instalando controlador en el hub...")
+                self.cola_comandos = asyncio.Queue()
+                asyncio.create_task(self.hub.run(ruta_temp))
 
-        except Exception as error:
-            self.registrar_log(f"Error BLE: {error}")
+                self.en_ejecucion.set()
+                self.log("LISTO - Control habilitado")
 
-import tkinter as tk
-import threading
-import asyncio
-from bleak import BleakScanner
+                while self.en_ejecucion.is_set():
+                    comando = await self.cola_comandos.get()
+                    await self.hub.write(comando.encode())
 
+            except Exception as error:
+                self.log(f"Error BLE: {error}")
 
-class VentanaSeleccionDispositivo(tk.Toplevel):
+            finally:
+                if ruta_temp and os.path.exists(ruta_temp):
+                    os.unlink(ruta_temp)
+                if self.hub:
+                    await self.hub.disconnect()
+                self.en_ejecucion.clear()
+                self.solicitud_conexion.clear()
+                self.log("Hub desconectado")
+
+    def conectar(self, dispositivo):
+        self.dispositivo_objetivo = dispositivo
+        self.bucle.call_soon_threadsafe(self.solicitud_conexion.set)
+
+    def enviar(self, comando: str):
+        if self.en_ejecucion.is_set() and self.cola_comandos:
+            self.bucle.call_soon_threadsafe(self.cola_comandos.put_nowait, comando)
+
+class VentanaSeleccionDispositivo(ctk.CTkToplevel):
     def __init__(self, padre, callback_seleccion):
         super().__init__(padre)
         self.callback_seleccion = callback_seleccion
 
-        self.title("Buscar HUB LEGO")
-        self.geometry("400x400")
+        self.title("Buscar Hub LEGO")
+        self.geometry("400x450")
         self.attributes("-topmost", True)
         self.grab_set()
 
-        self.etiqueta_estado = tk.Label(self, text="Escaneando dispositivos...")
-        self.etiqueta_estado.pack(pady=10)
+        ctk.CTkLabel(
+            self,
+            text="Dispositivos encontrados",
+            font=("Arial", 14, "bold")
+        ).pack(pady=10)
 
-        self.contenedor_dispositivos = tk.Frame(self)
-        self.contenedor_dispositivos.pack(
-            expand=True, fill="both", padx=10, pady=10
-        )
+        self.frame_scroll = ctk.CTkScrollableFrame(self, width=350, height=300)
+        self.frame_scroll.pack(expand=True, fill="both", padx=10)
 
-        # Iniciar escaneo en segundo plano
-        threading.Thread(
-            target=self._hilo_escaneo, daemon=True
-        ).start()
+        ctk.CTkButton(self, text="Escanear", command=self.escanear).pack(pady=10)
+        self.escanear()
 
-    def _hilo_escaneo(self):
-        asyncio.run(self._escaneo())
+    def escanear(self):
+        for w in self.frame_scroll.winfo_children():
+            w.destroy()
+        threading.Thread(target=self._hilo_escaner, daemon=True).start()
 
-    async def _escaneo(self):
-        dispositivos = await BleakScanner.discover(timeout=4.0)
-        self.after(0, lambda: self._mostrar_dispositivos(dispositivos))
+    def _hilo_escaner(self):
+        bucle = asyncio.new_event_loop()
+        dispositivos = bucle.run_until_complete(BleakScanner.discover(timeout=3))
+        bucle.close()
+        self.after(0, lambda: self._actualizar(dispositivos))
 
-    def _mostrar_dispositivos(self, dispositivos):
-        self.etiqueta_estado.config(text="Seleccione su dispositivo:")
-
+    def _actualizar(self, dispositivos):
         for dispositivo in dispositivos:
             if dispositivo.name:
-                boton = tk.Button(
-                    self.contenedor_dispositivos,
-                    text=f"{dispositivo.name}\n{dispositivo.address}",
-                    command=lambda d=dispositivo: self._seleccionar_dispositivo(d)
-                )
-                boton.pack(fill="x", pady=4)
+                ctk.CTkButton(
+                    self.frame_scroll,
+                    text=dispositivo.name,
+                    command=lambda d=dispositivo: self._seleccionar(d),
+                ).pack(fill="x", padx=10, pady=5)
 
-    def _seleccionar_dispositivo(self, dispositivo):
+    def _seleccionar(self, dispositivo):
         self.callback_seleccion(dispositivo)
         self.destroy()
 
-class Interfaz:
+class InterfazBrazo:
     def __init__(self, raiz):
         self.raiz = raiz
-        self.raiz.title("Control LEGO SPIKE")
-        self.raiz.geometry("480x520")
+        self.raiz.title("Control Brazo LEGO")
+        self.raiz.geometry("1440x720")
 
-        self.cola_log = Queue()
-        self.conexion = ConexionBLE(self.cola_log)
+        self.cola_logs = Queue()
+        self.trabajador = WorkerBLE(self.cola_logs)
+        self.trabajador.iniciar()
 
-        self.crear_interfaz()
-        self.actualizar_log()
+        self._construir_ui()
+        self._procesar_logs()
 
-    def crear_interfaz(self):
-        ttk.Button(
-            self.raiz,
-            text="Conectar",
+    def _construir_ui(self):
+        barra_superior = ctk.CTkFrame(self.raiz)
+        barra_superior.pack(fill="x", padx=20, pady=15)
+
+        ctk.CTkButton(
+            barra_superior,
+            text="BUSCAR HUB",
             command=self.abrir_selector
-        ).pack(pady=10)
+        ).pack(side="left", padx=10)
 
-        marco = ttk.Frame(self.raiz)
-        marco.pack()
-
-        self.crear_boton(marco, "Base ←", "base_izq", 0, 0)
-        self.crear_boton(marco, "Base →", "base_der", 0, 1)
-
-        self.crear_boton(marco, "Muñeca ↑", "muneca_arr", 1, 0)
-        self.crear_boton(marco, "Muñeca ↓", "muneca_abj", 1, 1)
-
-        self.crear_boton(marco, "Brazo ↑", "brazo_arr", 2, 0)
-        self.crear_boton(marco, "Brazo ↓", "brazo_abj", 2, 1)
-
-        self.crear_boton(marco, "Abrir Garra", "garra_abrir", 3, 0)
-        self.crear_boton(marco, "Cerrar Garra", "garra_cerrar", 3, 1)
-
-        ttk.Button(
-            self.raiz,
-            text="STOP EMERGENCIA",
-            command=lambda: self.conexion.enviar_comando("detener_todo")
-        ).pack(pady=10)
-
-        self.texto_log = tk.Text(self.raiz, height=8, state="disabled")
-        self.texto_log.pack(fill="both", expand=True, padx=5, pady=5)
-
-    def crear_boton(self, padre, texto, comando, fila, columna):
-        boton = ttk.Button(padre, text=texto, width=18)
-        boton.grid(row=fila, column=columna, padx=5, pady=8)
-        boton.bind(
-            "<ButtonPress>",
-            lambda e: self.conexion.enviar_comando(comando)
+        self.estado = ctk.CTkLabel(
+            barra_superior,
+            text="● DESCONECTADO",
+            text_color="red"
         )
-        boton.bind(
-            "<ButtonRelease>",
-            lambda e: self.conexion.enviar_comando("detener_todo")
-        )
+        self.estado.pack(side="right", padx=15)
+
+        self.texto_logs = ctk.CTkTextbox(self.raiz, height=160)
+        self.texto_logs.pack(fill="both", padx=20, pady=15)
+        self.texto_logs.configure(state="disabled")
+
+        self._crear_botones()
+
+    def _crear_botones(self):
+        self._boton("BASE ◀", "D-", 0.2, 0.25)
+        self._boton("BASE ▶", "D+", 0.8, 0.25)
+        self._boton("MUÑECA ▲", "F+", 0.5, 0.37)
+        self._boton("MUÑECA ▼", "F-", 0.5, 0.49)
+        self._boton("BRAZO ▲", "B+", 0.8, 0.37)
+        self._boton("BRAZO ▼", "B-", 0.8, 0.49)
+        self._boton("GARRA +", "C+", 0.2, 0.37)
+        self._boton("GARRA -", "C-", 0.2, 0.49)
+
+    def _boton(self, texto, comando, x, y):
+        boton = ctk.CTkButton(self.raiz, text=texto, width=140, height=50)
+        boton.place(relx=x, rely=y, anchor="center")
+        boton.bind("<ButtonPress-1>", lambda e: self.trabajador.enviar(comando))
+        boton.bind("<ButtonRelease-1>", lambda e: self.trabajador.enviar("ST"))
 
     def abrir_selector(self):
-        VentanaSeleccionDispositivo(self.raiz, self.dispositivo_seleccionado)
+        VentanaSeleccionDispositivo(self.raiz, self.trabajador.conectar)
 
-    def dispositivo_seleccionado(self, dispositivo):
-        self.cola_log.put(f"Dispositivo seleccionado: {dispositivo.name}")
-        self.conexion.set_dispositivo(dispositivo)
-        self.conexion.iniciar()
-
-    def actualizar_log(self):
+    def _procesar_logs(self):
         try:
             while True:
-                mensaje = self.cola_log.get_nowait()
-                self.texto_log.config(state="normal")
-                self.texto_log.insert("end", mensaje + "\n")
-                self.texto_log.see("end")
-                self.texto_log.config(state="disabled")
+                mensaje = self.cola_logs.get_nowait()
+                self.texto_logs.configure(state="normal")
+                self.texto_logs.insert("end", f"> {mensaje}\n")
+                self.texto_logs.see("end")
+                self.texto_logs.configure(state="disabled")
+
+                if "LISTO" in mensaje:
+                    self.estado.configure(text="● CONECTADO", text_color="green")
+                if "desconectado" in mensaje.lower():
+                    self.estado.configure(text="● DESCONECTADO", text_color="red")
+
         except Empty:
             pass
 
-        self.raiz.after(150, self.actualizar_log)
-
+        self.raiz.after(100, self._procesar_logs)
 
 if __name__ == "__main__":
-    raiz = tk.Tk()
-    Interfaz(raiz)
+    ctk.set_appearance_mode("dark")
+    raiz = ctk.CTk()
+    InterfazBrazo(raiz)
     raiz.mainloop()
