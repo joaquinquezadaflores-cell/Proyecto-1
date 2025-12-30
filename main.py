@@ -189,7 +189,7 @@ class InterfazBrazo:
     def __init__(self, raiz):
         self.raiz = raiz
         self.raiz.title("Control Brazo LEGO")
-        self.raiz.geometry("1440x720")
+        self.raiz.geometry("720x720")
 
         self.cola_logs = Queue()
         self.trabajador = WorkerBLE(self.cola_logs)
@@ -215,27 +215,41 @@ class InterfazBrazo:
         )
         self.estado.pack(side="right", padx=15)
 
+        # ====== FRAME CENTRAL ======
+        frame_control = ctk.CTkFrame(self.raiz)
+        frame_control.pack(expand=True)
+
+        for i in range(3):
+            frame_control.columnconfigure(i, weight=1)
+            frame_control.rowconfigure(i, weight=1)
+
+        self._boton(frame_control, "BASE ◀", "D-", 0, 0)
+        self._boton(frame_control, "BASE ▶", "D+", 0, 2)
+
+        self._boton(frame_control, "GARRA +", "C+", 1, 0)
+        self._boton(frame_control, "MUÑECA ▲", "F+", 1, 1)
+        self._boton(frame_control, "BRAZO ▲", "B+", 1, 2)
+
+        self._boton(frame_control, "GARRA -", "C-", 2, 0)
+        self._boton(frame_control, "MUÑECA ▼", "F-", 2, 1)
+        self._boton(frame_control, "BRAZO ▼", "B-", 2, 2)
+
         self.texto_logs = ctk.CTkTextbox(self.raiz, height=160)
         self.texto_logs.pack(fill="both", padx=20, pady=15)
         self.texto_logs.configure(state="disabled")
 
-        self._crear_botones()
+    def _boton(self, padre, texto, comando, fila, columna):
+        boton = ctk.CTkButton(
+            padre,
+            text=texto,
+            width=160,
+            height=60
+        )
+        boton.grid(row=fila, column=columna, padx=30, pady=20)
 
-    def _crear_botones(self):
-        self._boton("BASE ◀", "D-", 0.2, 0.25)
-        self._boton("BASE ▶", "D+", 0.8, 0.25)
-        self._boton("MUÑECA ▲", "F+", 0.5, 0.37)
-        self._boton("MUÑECA ▼", "F-", 0.5, 0.49)
-        self._boton("BRAZO ▲", "B+", 0.8, 0.37)
-        self._boton("BRAZO ▼", "B-", 0.8, 0.49)
-        self._boton("GARRA +", "C+", 0.2, 0.37)
-        self._boton("GARRA -", "C-", 0.2, 0.49)
-
-    def _boton(self, texto, comando, x, y):
-        boton = ctk.CTkButton(self.raiz, text=texto, width=140, height=50)
-        boton.place(relx=x, rely=y, anchor="center")
         boton.bind("<ButtonPress-1>", lambda e: self.trabajador.enviar(comando))
         boton.bind("<ButtonRelease-1>", lambda e: self.trabajador.enviar("ST"))
+
 
     def abrir_selector(self):
         VentanaSeleccionDispositivo(self.raiz, self.trabajador.conectar)
