@@ -54,8 +54,9 @@ El proyecto fue desarrollado en la **Universidad de Tarapacá (Arica)** durante 
 
 ## Uso básico
 1. Encender el hub LEGO SPIKE Prime.
-2. Conectarlo al computador mediante Bluetooth.
-3. Ejecutar el archivo principal
+2. Ejecutar el archivo principal
+3. Conectar el Hub
+4. Operar
 
 
 
